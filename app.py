@@ -8,7 +8,7 @@ st.title("🚀 InsightX: Universal Data Engine")
 
 # 2. SECRETS & API SYNC
 try:
-    client = Groq(api_key=st.secrets["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"])
+    client = Groq(api_key=st.secrets["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"])
 except Exception:
     st.error("Missing 'GROQ_API_KEY' in Secrets! Check Manage App > Settings > Secrets.")
     st.stop()
