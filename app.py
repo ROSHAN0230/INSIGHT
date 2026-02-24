@@ -9,7 +9,7 @@ st.title("🚀 InsightX: Universal Data Engine")
 # 2. SECRETS CHECK & CLIENT INITIALIZATION
 # This MUST match the name 'GROQ_API_KEY' you saved in your dashboard
 try:
-    client = Groq(api_key=st.secrets["AIzaSyDBLWRjQPhdwKWIPU39eJa9921jJAFg7m4"])
+    client = Groq(api_key=st.secrets["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"])
 except Exception:
     st.error("Missing 'GROQ_API_KEY' in Streamlit Secrets! Check Manage App > Settings > Secrets.")
     st.stop()
