@@ -11,8 +11,7 @@ if "GROQ_API_KEY" not in st.secrets:
     st.error("Please add GROQ_API_KEY to your Streamlit Secrets!")
     st.stop()
 
-client = Groq(api_key=st.secrets["AIzaSyDBLWRjQPhdwKWIPU39eJa9921jJAFg7m4"])
-
+client = Groq(api_key="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")
 # 3. DYNAMIC DATA LOADING (Memory Optimized)
 @st.cache_data
 def load_data(uploaded_file):
