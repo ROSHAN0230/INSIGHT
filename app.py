@@ -390,14 +390,52 @@ if uploaded_file:
         final_q = user_q if user_q else (sel_q if sel_q != "Choose or type below..." else None)
 
         if final_q:
-            with st.spinner("🔍 Searching..."):
-                rel = retrieve_chunks(final_q, vectorizer, tfidf_matrix, chunks)
-            with st.spinner("🤖 Generating answer..."):
-                try:
+            # Detect if user asks for chart/graph
+            chart_keywords = ["chart", "graph", "plot", "map", "trend", "visualize"]
+            is_chart_q = any(k in final_q.lower() for k in chart_keywords)
+
+            if is_chart_q and df is not None:
+                with st.spinner("📊 Analyzing data for visualization..."):
+                    code_used, error = run_code(final_q, df, st.session_state.chat_history)
+                    if not error:
+                        st.session_state.chat_history.append({
+                            "question": final_q, 
+                            "answer": f"I've generated a chart for you based on the data.",
+                            "type": "chart",
+                            "code": code_used
+                        })
+                    else:
+                        st.session_state.chat_history.append({
+                            "question": final_q,
+                            "answer": f"I tried to generate a chart but ran into an issue: {error}. Let me give you a text summary instead."
+                        })
+                        # Fallback to text
+                        rel = retrieve_chunks(final_q, vectorizer, tfidf_matrix, chunks)
+                        ans = ask_ai(final_q, rel, st.session_state.chat_history)
+                        st.session_state.chat_history[-1]["answer"] += f"\n\n--- Summary ---\n{ans}"
+            
+            elif is_chart_q and df is None:
+                # User asked for chart on non-tabular file
+                st.session_state.chat_history.append({
+                    "question": final_q,
+                    "answer": "I'd love to generate a chart, but this file (like an image or PDF) doesn't contain the structured data needed for graphs. Here's what I can tell you about the content instead:",
+                })
+                with st.spinner("🔍 Reading content..."):
+                    rel = retrieve_chunks(final_q, vectorizer, tfidf_matrix, chunks)
+                with st.spinner("🤖 Summarizing..."):
                     ans = ask_ai(final_q, rel, st.session_state.chat_history)
-                    st.session_state.chat_history.append({"question": final_q, "answer": ans})
-                except Exception as e:
-                    st.error(f"AI Error: {e}")
+                    st.session_state.chat_history[-1]["answer"] += f"\n\n{ans}"
+
+            else:
+                # Normal text question
+                with st.spinner("🔍 Searching..."):
+                    rel = retrieve_chunks(final_q, vectorizer, tfidf_matrix, chunks)
+                with st.spinner("🤖 Generating answer..."):
+                    try:
+                        ans = ask_ai(final_q, rel, st.session_state.chat_history)
+                        st.session_state.chat_history.append({"question": final_q, "answer": ans})
+                    except Exception as e:
+                        st.error(f"AI Error: {e}")
 
         if st.session_state.chat_history:
             chat_txt = "\n\n".join(f"Q: {c['question']}\nA: {c['answer']}"
@@ -410,6 +448,13 @@ if uploaded_file:
                     st.write(chat["question"])
                 with st.chat_message("assistant"):
                     st.write(chat["answer"])
+                    # RE-RENDER chart if type is chart
+                    if chat.get("type") == "chart" and chat.get("code") and df is not None:
+                        try:
+                            exec(chat["code"], {"df": df, "st": st, "pd": pd, "np": np})
+                        except Exception:
+                            st.info("Chart preview unavailable.")
+                    
                     st.download_button(
                         "⬇️ Download answer", data=chat["answer"],
                         file_name=f"answer_{idx}.txt", mime="text/plain",
@@ -553,4 +598,5 @@ else:
 5. **Data Analysis** → auto charts, quality checks, full stats
 6. **Download** answers or data anytime
 """)
+
 
