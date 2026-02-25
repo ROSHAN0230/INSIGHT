@@ -262,7 +262,7 @@ def ask_ai(question, chunks, history, retries=3):
             else:
                 raise e
 
-def run_code(question, df, history, retries=3):
+def run_code(question, df, history, execute=True, retries=3):
     cols   = str(list(df.columns))
     dtypes = df.dtypes.astype(str).to_string()
     sample = df.head(3).to_string()
@@ -281,7 +281,7 @@ def run_code(question, df, history, retries=3):
     }]
     for c in history[-2:]:
         messages.append({"role": "user",      "content": c["question"]})
-        messages.append({"role": "assistant", "content": c["answer"]})
+        messages.append({"role": "assistant", "content": c.get("answer", "")})
     messages.append({
         "role": "user",
         "content": f"DataFrame info:\n{info}\n\nQuestion: {question}"
@@ -304,7 +304,9 @@ def run_code(question, df, history, retries=3):
                 if not re.match(r"^\d{1,2}:\d{2}\s*(AM|PM)?$",
                                 line.strip(), re.IGNORECASE)
             ).strip()
-            exec(clean, {"df": df, "st": st, "pd": pd, "np": np})
+            
+            if execute:
+                exec(clean, {"df": df, "st": st, "pd": pd, "np": np})
             return clean, None
         except Exception as e:
             if attempt < retries - 1:
@@ -396,7 +398,7 @@ if uploaded_file:
 
             if is_chart_q and df is not None:
                 with st.spinner("📊 Analyzing data for visualization..."):
-                    code_used, error = run_code(final_q, df, st.session_state.chat_history)
+                    code_used, error = run_code(final_q, df, st.session_state.chat_history, execute=False)
                     if not error:
                         st.session_state.chat_history.append({
                             "question": final_q, 
@@ -404,6 +406,7 @@ if uploaded_file:
                             "type": "chart",
                             "code": code_used
                         })
+                        st.rerun()
                     else:
                         st.session_state.chat_history.append({
                             "question": final_q,
@@ -413,6 +416,7 @@ if uploaded_file:
                         rel = retrieve_chunks(final_q, vectorizer, tfidf_matrix, chunks)
                         ans = ask_ai(final_q, rel, st.session_state.chat_history)
                         st.session_state.chat_history[-1]["answer"] += f"\n\n--- Summary ---\n{ans}"
+                        st.rerun()
             
             elif is_chart_q and df is None:
                 # User asked for chart on non-tabular file
@@ -425,6 +429,7 @@ if uploaded_file:
                 with st.spinner("🤖 Summarizing..."):
                     ans = ask_ai(final_q, rel, st.session_state.chat_history)
                     st.session_state.chat_history[-1]["answer"] += f"\n\n{ans}"
+                    st.rerun()
 
             else:
                 # Normal text question
@@ -434,6 +439,7 @@ if uploaded_file:
                     try:
                         ans = ask_ai(final_q, rel, st.session_state.chat_history)
                         st.session_state.chat_history.append({"question": final_q, "answer": ans})
+                        st.rerun()
                     except Exception as e:
                         st.error(f"AI Error: {e}")
 
@@ -616,3 +622,6 @@ else:
 5. **Data Analysis** → auto charts, quality checks, full stats
 6. **Download** answers or data anytime
 """)
+
+
+
