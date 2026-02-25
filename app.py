@@ -393,10 +393,14 @@ if uploaded_file:
         st.session_state.suggestions = []
     if "last_file" not in st.session_state:
         st.session_state.last_file = ""
+    if "pending_q" not in st.session_state:
+        st.session_state.pending_q = None
+
     if st.session_state.last_file != uploaded_file.name:
         st.session_state.chat_history = []
         st.session_state.calc_history = []
         st.session_state.last_file    = uploaded_file.name
+        st.session_state.pending_q    = None
         # PERFORMANCE FIX: Pre-generate dynamic suggestions
         with st.spinner("🧠 Preparing smart suggestions..."):
             st.session_state.suggestions = generate_suggestions(text, uploaded_file.name)
@@ -424,16 +428,23 @@ if uploaded_file:
             "For exact numbers → use ⚡ Precise Calculator."
         )
 
+        def handle_q():
+            if st.session_state.ask_input:
+                st.session_state.pending_q = st.session_state.ask_input
+                st.session_state.ask_input = ""
+            elif st.session_state.quick_q != "Choose or type below...":
+                st.session_state.pending_q = st.session_state.quick_q
+                st.session_state.quick_q = "Choose or type below..."
+
         quick_qs = st.session_state.suggestions
-        sel_q  = st.selectbox("⚡ Quick Questions:", ["Choose or type below..."] + quick_qs, key="quick_q")
-        user_q = st.text_input("Your question:", placeholder="e.g., What are the key points in this file?", key="ask_input")
+        st.selectbox("⚡ Quick Questions:", ["Choose or type below..."] + quick_qs, 
+                     key="quick_q", on_change=handle_q)
+        st.text_input("Your question:", placeholder="e.g., What are the key points in this file?", 
+                      key="ask_input", on_change=handle_q)
 
-        final_q = user_q if user_q else (sel_q if sel_q != "Choose or type below..." else None)
-
-        if final_q:
-            # PERFORMANCE FIX: Clear inputs to prevent infinite loop on rerun
-            if user_q: st.session_state.ask_input = ""
-            if sel_q != "Choose or type below...": st.session_state.quick_q = "Choose or type below..."
+        if st.session_state.pending_q:
+            final_q = st.session_state.pending_q
+            st.session_state.pending_q = None # Consume it
 
             # Detect if user asks for chart/graph
             chart_keywords = ["chart", "graph", "plot", "map", "trend", "visualize"]
