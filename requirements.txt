@@ -1,14 +1,12 @@
 streamlit
-groq
 pandas
+numpy
+groq
+scikit-learn
 pypdf
 python-docx
 python-pptx
 openpyxl
-faiss-cpu
-sentence-transformers
-numpy
 Pillow
 pytesseract
 pdf2image
-opencv-python-headless
