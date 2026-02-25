@@ -69,16 +69,55 @@ MAX_TOKENS_OUT    = 700     # Max tokens in AI response
 def extract_text_from_csv(file):
     df = pd.read_csv(file)
     total_rows = len(df)
-    text = f"CSV File | Total Rows: {total_rows:,} | Columns: {list(df.columns)}\n\n"
-    if total_rows > MAX_CSV_ROWS:
-        sample_df = df.sample(n=MAX_CSV_ROWS, random_state=42)
-        text += (
-            f"(Smart sample of {MAX_CSV_ROWS:,} rows shown for AI Q&A. "
-            f"Full {total_rows:,} rows used in Precise Calculator.)\n\n"
-        )
-        text += sample_df.to_string(index=False)
-    else:
-        text += df.to_string(index=False)
+    num_cols = df.select_dtypes(include='number').columns.tolist()
+    cat_cols = [c for c in df.select_dtypes(include=['object','category']).columns
+                if df[c].nunique() <= 50]
+
+    # Smart statistical summary — 95% smaller than raw rows, no browser crash
+    lines = [
+        f"DATASET: {total_rows:,} rows x {len(df.columns)} columns",
+        f"COLUMNS: {list(df.columns)}",
+        "",
+    ]
+
+    # Date range
+    for col in df.columns:
+        if any(k in col.lower() for k in ['date','time']):
+            try:
+                lines.append(f"{col.upper()} RANGE: {df[col].min()} to {df[col].max()}")
+            except Exception:
+                pass
+
+    # Numeric stats
+    if num_cols:
+        lines.append("\nNUMERIC STATS:")
+        lines.append(df[num_cols].describe().round(2).to_string())
+
+    # Category breakdowns
+    for cat in cat_cols[:5]:
+        lines.append(f"\n{cat.upper()} BREAKDOWN:")
+        if num_cols:
+            try:
+                bd = df.groupby(cat)[num_cols[0]].agg(['count','sum','mean']).round(2)
+                lines.append(bd.to_string())
+            except Exception:
+                lines.append(df[cat].value_counts().to_string())
+        else:
+            lines.append(df[cat].value_counts().to_string())
+
+    # Top rows
+    if num_cols:
+        lines.append(f"\nTOP 15 ROWS by {num_cols[0]}:")
+        try:
+            lines.append(df.nlargest(15, num_cols[0]).to_string(index=False))
+        except Exception:
+            lines.append(df.head(15).to_string(index=False))
+
+    # Sample
+    lines.append("\nFIRST 30 ROWS:")
+    lines.append(df.head(30).to_string(index=False))
+
+    text = "\n".join(lines)
     return text, df
 
 def extract_text_from_excel(file):
