@@ -444,6 +444,9 @@ if uploaded_file:
                                file_name="chat.txt", mime="text/plain", key="dl_chat")
             st.subheader("🗨️ Conversation")
             for idx, chat in enumerate(reversed(st.session_state.chat_history)):
+                # Calculate the true index in the original list (since we are reversed)
+                true_idx = len(st.session_state.chat_history) - 1 - idx
+                
                 with st.chat_message("user"):
                     st.write(chat["question"])
                 with st.chat_message("assistant"):
@@ -455,11 +458,17 @@ if uploaded_file:
                         except Exception:
                             st.info("Chart preview unavailable.")
                     
-                    st.download_button(
-                        "⬇️ Download answer", data=chat["answer"],
-                        file_name=f"answer_{idx}.txt", mime="text/plain",
-                        key=f"dl_ans_{idx}"
-                    )
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.download_button(
+                            "⬇️ Download answer", data=chat["answer"],
+                            file_name=f"answer_{idx}.txt", mime="text/plain",
+                            key=f"dl_ans_{idx}"
+                        )
+                    with c2:
+                        if st.button("🗑️ Delete this", key=f"del_{true_idx}"):
+                            st.session_state.chat_history.pop(true_idx)
+                            st.rerun()
             if st.button("🗑️ Clear Chat", key="clear_chat"):
                 st.session_state.chat_history = []
                 st.rerun()
@@ -494,7 +503,16 @@ if uploaded_file:
                             st.code(code_used, language="python")
 
             if st.session_state.calc_history:
-                if st.button("🗑️ Clear Calculator", key="clear_calc"):
+                st.subheader("🗨️ Calculation History")
+                for idx, calc in enumerate(reversed(st.session_state.calc_history)):
+                    true_idx = len(st.session_state.calc_history) - 1 - idx
+                    with st.expander(f"Q: {calc['question']}", expanded=(idx == 0)):
+                        st.markdown(calc["answer"])
+                        if st.button("🗑️ Delete this", key=f"del_calc_{true_idx}"):
+                            st.session_state.calc_history.pop(true_idx)
+                            st.rerun()
+
+                if st.button("🗑️ Clear All", key="clear_calc"):
                     st.session_state.calc_history = []
                     st.rerun()
         else:
@@ -598,5 +616,3 @@ else:
 5. **Data Analysis** → auto charts, quality checks, full stats
 6. **Download** answers or data anytime
 """)
-
-
