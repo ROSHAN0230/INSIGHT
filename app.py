@@ -190,6 +190,32 @@ def extract_content(uploaded_file):
 
     return text, df
 
+@st.cache_data(show_spinner=False)
+def generate_suggestions(text, file_name):
+    """Generate 5 context-aware questions about the file content."""
+    prompt = (
+        f"Based on the following file content from '{file_name}', "
+        "generate 5-7 diverse and insightful questions a user might ask. "
+        "Provide ONLY the questions, one per line, no numbering or extra text.\n\n"
+        f"Content Sample:\n{text[:2000]}"
+    )
+    try:
+        r = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=300,
+        )
+        lines = r.choices[0].message.content.strip().split("\n")
+        return [l.strip().lstrip("0123456789.- ") for l in lines if l.strip()]
+    except Exception:
+        return [
+            "What is this dataset about?",
+            "Summarize the key insights",
+            "What are the main trends?",
+            "Can you explain the data structure?",
+            "Give me a summary of findings",
+        ]
+
 # ── FAST TF-IDF RAG ───────────────────────────────────────────────────────────
 @st.cache_resource
 def build_tfidf_index(text, file_name):
@@ -347,12 +373,17 @@ if uploaded_file:
         st.session_state.chat_history = []
     if "calc_history" not in st.session_state:
         st.session_state.calc_history = []
+    if "suggestions" not in st.session_state:
+        st.session_state.suggestions = []
     if "last_file" not in st.session_state:
         st.session_state.last_file = ""
     if st.session_state.last_file != uploaded_file.name:
         st.session_state.chat_history = []
         st.session_state.calc_history = []
         st.session_state.last_file    = uploaded_file.name
+        # PERFORMANCE FIX: Pre-generate dynamic suggestions
+        with st.spinner("🧠 Preparing smart suggestions..."):
+            st.session_state.suggestions = generate_suggestions(text, uploaded_file.name)
 
     # Guide table
     st.markdown("""
@@ -377,17 +408,9 @@ if uploaded_file:
             "For exact numbers → use ⚡ Precise Calculator."
         )
 
-        quick_qs = [
-            "What is this dataset about? Give me a complete overview",
-            "Summarize the key insights from this file",
-            "What are the main trends or patterns?",
-            "Which categories have the most transactions?",
-            "What can you tell me about failed vs successful transactions?",
-            "Which merchants appear most frequently?",
-            "Give me key insights about spending behavior",
-        ]
+        quick_qs = st.session_state.suggestions
         sel_q  = st.selectbox("⚡ Quick Questions:", ["Choose or type below..."] + quick_qs, key="quick_q")
-        user_q = st.text_input("Your question:", placeholder="e.g., What are the main spending categories?", key="ask_input")
+        user_q = st.text_input("Your question:", placeholder="e.g., What are the key points in this file?", key="ask_input")
 
         final_q = user_q if user_q else (sel_q if sel_q != "Choose or type below..." else None)
 
@@ -622,6 +645,3 @@ else:
 5. **Data Analysis** → auto charts, quality checks, full stats
 6. **Download** answers or data anytime
 """)
-
-
-
