@@ -36,7 +36,20 @@ TOP_K          = 3
 CONTEXT_CAP    = 4000
 MAX_OUT_TOKENS = 600
 
-# ── FILE EXTRACTORS ───────────────────────────────────────────────────────────
+# ── FILE EXTRACTORS & UTILS ────────────────────────────────────────────────────
+@st.cache_data(show_spinner=False)
+def get_df_stats(df):
+    """Cache heavy dataframe stats calculations."""
+    missing = {k: v for k, v in df.isnull().sum().items() if v > 0}
+    dupes = int(df.duplicated().sum())
+    describe = df.describe()
+    return missing, dupes, describe
+
+@st.cache_data(show_spinner=False)
+def get_csv_download(df):
+    """Cache CSV conversion to avoid lag on every rerun."""
+    return df.to_csv(index=False).encode('utf-8')
+
 @st.cache_data(show_spinner=False)
 def extract_text_from_csv(file_bytes):
     # Use chunking for reading large CSVs if possible, or just read it
@@ -446,12 +459,15 @@ if uploaded_file:
     with tab3:
         st.subheader("📊 Data Analysis")
         if df is not None:
+            # PERFORMANCE FIX: Use cached stats
+            with st.spinner("📊 Calculating statistics..."):
+                missing, dupes, stats_desc = get_df_stats(df)
+
             c1, c2, c3 = st.columns(3)
             c1.metric("Total Rows",     f"{len(df):,}")
             c2.metric("Total Columns",  f"{len(df.columns)}")
-            c3.metric("Duplicate Rows", f"{int(df.duplicated().sum()):,}")
+            c3.metric("Duplicate Rows", f"{dupes:,}")
 
-            missing = {k: v for k, v in df.isnull().sum().items() if v > 0}
             if missing:
                 st.warning(f"⚠️ Missing values in: {', '.join(missing.keys())}")
                 st.dataframe(pd.DataFrame.from_dict(
@@ -460,7 +476,6 @@ if uploaded_file:
             else:
                 st.success("✅ No missing values!")
 
-            dupes = int(df.duplicated().sum())
             if dupes > 0:
                 st.warning(f"⚠️ {dupes} duplicate rows found!")
             else:
@@ -472,19 +487,28 @@ if uploaded_file:
                 sel_col    = st.selectbox("Select column:", num_cols, key="chart_col")
                 chart_type = st.radio("Chart type:", ["Bar","Line","Area"],
                                       horizontal=True, key="chart_type")
+                
+                # PERFORMANCE FIX: Sample data for charts (max 1,000 pts) 
+                # Rendering 100k points crashes the browser.
                 cdata = df[sel_col].dropna().reset_index(drop=True)
+                if len(cdata) > 1000:
+                    st.caption(f"Showing representative sample of 1,000/{len(cdata):,} points.")
+                    cdata = cdata.sample(n=1000, random_state=42).sort_index()
+                
                 if chart_type == "Bar":   st.bar_chart(cdata)
                 elif chart_type == "Line": st.line_chart(cdata)
                 else:                      st.area_chart(cdata)
 
             st.markdown("#### 📋 Statistical Summary")
-            st.dataframe(df.describe())
+            st.dataframe(stats_desc)
 
             st.markdown("#### 🗃️ Raw Data (first 100 rows)")
             st.dataframe(df.head(100))
 
+            # PERFORMANCE FIX: Use cached CSV for download
+            csv_data = get_csv_download(df)
             st.download_button(
-                "⬇️ Download as CSV", data=df.to_csv(index=False),
+                "⬇️ Download as CSV", data=csv_data,
                 file_name="data.csv", mime="text/csv", key="dl_csv"
             )
         else:
@@ -529,3 +553,4 @@ else:
 5. **Data Analysis** → auto charts, quality checks, full stats
 6. **Download** answers or data anytime
 """)
+
