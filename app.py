@@ -58,8 +58,8 @@ def load_embedding_model():
 
 # ── CONSTANTS ─────────────────────────────────────────────────────────────────
 MAX_FILE_SIZE_MB = 200
-TOP_K_CHUNKS = 8
-MAX_WORDS_FOR_RAG = 300000  # Cap at 300k words to prevent browser crash
+TOP_K_CHUNKS = 4
+MAX_WORDS_FOR_RAG = 100000  # Cap at 100k words to prevent browser crash
 
 # ── FILE EXTRACTORS ───────────────────────────────────────────────────────────
 def extract_text_from_csv(file):
@@ -68,9 +68,9 @@ def extract_text_from_csv(file):
     text = f"CSV File | Total Rows: {total_rows:,} | Columns: {list(df.columns)}\n\n"
     # For very large CSVs, use a smart sample for RAG text
     # The full df is still passed for precise calculations
-    if total_rows > 50000:
-        sample_df = df.sample(n=50000, random_state=42)
-        text += f"(Showing smart sample of 50,000 rows for AI analysis. Full {total_rows:,} rows available in Precise Calculator.)\n\n"
+    if total_rows > 20000:
+        sample_df = df.sample(n=20000, random_state=42)
+        text += f"(Showing smart sample of 20,000 rows for AI analysis. Full {total_rows:,} rows available in Precise Calculator.)\n\n"
         text += sample_df.to_string(index=False)
     else:
         text += df.to_string(index=False)
@@ -231,7 +231,7 @@ def extract_content(uploaded_file):
     return text, df
 
 # ── RAG CORE ──────────────────────────────────────────────────────────────────
-def chunk_text(text, chunk_size=500, overlap=75):
+def chunk_text(text, chunk_size=300, overlap=50):
     """Split text into overlapping chunks."""
     words = text.split()
     chunks = []
@@ -245,7 +245,7 @@ def chunk_text(text, chunk_size=500, overlap=75):
     return chunks
 
 @st.cache_resource
-def build_vector_index(text, file_name, chunk_size=500):
+def build_vector_index(text, file_name, chunk_size=300):
     import faiss
     import numpy as np
 
@@ -300,6 +300,9 @@ def retrieve_relevant_chunks(question, index, chunks, top_k=TOP_K_CHUNKS):
 
 def ask_ai_with_retry(question, relevant_chunks, chat_history, retries=3):
     context = "\n\n---\n\n".join(relevant_chunks)
+    # Hard cap context to 6000 chars to never exceed Groq token limit
+    if len(context) > 6000:
+        context = context[:6000] + "\n...[truncated for token limit]"
 
     system_prompt = (
         "You are an expert Data Analyst and Document AI. "
@@ -325,7 +328,7 @@ def ask_ai_with_retry(question, relevant_chunks, chat_history, retries=3):
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=messages,
-                max_tokens=2048,
+                max_tokens=800,
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
@@ -338,6 +341,9 @@ def ask_ai_with_retry(question, relevant_chunks, chat_history, retries=3):
 def generate_and_run_code(question, df, chat_history, retries=3):
     """Ask AI to generate Python/pandas code and execute it precisely."""
     columns_info = f"Columns: {list(df.columns)}\nDtypes:\n{df.dtypes.to_string()}\nSample:\n{df.head(3).to_string()}"
+    # Cap columns_info to avoid token limit
+    if len(columns_info) > 2000:
+        columns_info = columns_info[:2000]
 
     system_prompt = (
         "You are a Python data analyst. Given a pandas DataFrame called 'df', "
