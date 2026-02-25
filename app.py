@@ -192,29 +192,35 @@ def extract_content(uploaded_file):
 
 @st.cache_data(show_spinner=False)
 def generate_suggestions(text, file_name):
-    """Generate 5 context-aware questions about the file content."""
+    """Generate 5 context-aware questions about the file content with retry logic."""
     prompt = (
         f"Based on the following file content from '{file_name}', "
         "generate 5-7 diverse and insightful questions a user might ask. "
         "Provide ONLY the questions, one per line, no numbering or extra text.\n\n"
-        f"Content Sample:\n{text[:2000]}"
+        f"Content Sample:\n{text[:5000]}"
     )
-    try:
-        r = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=300,
-        )
-        lines = r.choices[0].message.content.strip().split("\n")
-        return [l.strip().lstrip("0123456789.- ") for l in lines if l.strip()]
-    except Exception:
-        return [
-            "What is this dataset about?",
-            "Summarize the key insights",
-            "What are the main trends?",
-            "Can you explain the data structure?",
-            "Give me a summary of findings",
-        ]
+    for attempt in range(4):
+        try:
+            r = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=300,
+            )
+            lines = r.choices[0].message.content.strip().split("\n")
+            return [l.strip().lstrip("0123456789.- ") for l in lines if l.strip()]
+        except Exception as e:
+            if "429" in str(e) and attempt < 3:
+                time.sleep(2 ** attempt + 1)
+            else:
+                break
+    # Fallback suggestions if API busy
+    return [
+        "Give me a detailed summary of this file",
+        "What are the most important points here?",
+        "Are there any specific trends or patterns?",
+        f"Explain the data structure of {file_name}",
+        "What is the main purpose of this content?"
+    ]
 
 # ── FAST TF-IDF RAG ───────────────────────────────────────────────────────────
 @st.cache_resource
@@ -253,7 +259,7 @@ def retrieve_chunks(question, vectorizer, tfidf_matrix, chunks):
     return [chunks[i] for i in top_idx if i < len(chunks)]
 
 # ── AI CALLS ──────────────────────────────────────────────────────────────────
-def ask_ai(question, chunks, history, retries=3):
+def ask_ai(question, chunks, history, retries=4):
     context = "\n---\n".join(chunks)
     if len(context) > CONTEXT_CAP:
         context = context[:CONTEXT_CAP]
@@ -261,14 +267,16 @@ def ask_ai(question, chunks, history, retries=3):
     messages = [{
         "role": "system",
         "content": (
-            "You are an expert Data Analyst. Answer using only the provided excerpts. "
-            "Be concise, accurate and well-structured. "
-            "If answer not in excerpts, say so clearly."
+            "You are a strict Data Analyst and Assistant. "
+            "Answer ONLY using the provided file excerpts. "
+            "If the excerpts do not contain the answer, say: 'The file does not contain information related to the question asked.' "
+            "Do NOT use general knowledge or guess if it's not in the file. "
+            "Stay 100% grounded in the uploaded content."
         )
     }]
     for c in history[-3:]:
         messages.append({"role": "user",      "content": c["question"]})
-        messages.append({"role": "assistant", "content": c["answer"]})
+        messages.append({"role": "assistant", "content": c.get("answer", "")})
     messages.append({
         "role": "user",
         "content": f"File content:\n{context}\n\nQuestion: {question}"
@@ -283,10 +291,15 @@ def ask_ai(question, chunks, history, retries=3):
             )
             return r.choices[0].message.content.strip()
         except Exception as e:
-            if attempt < retries - 1:
-                time.sleep(2 ** attempt)
+            if "429" in str(e) and attempt < retries - 1:
+                # Exponential backoff for rate limits
+                wait = 2 ** attempt + 2
+                st.toast(f"⏳ System busy (Rate Limit). Retrying in {wait}s...", icon="⚠️")
+                time.sleep(wait)
+            elif attempt < retries - 1:
+                time.sleep(1)
             else:
-                raise e
+                return f"AI Error: {e}. Please try again in 5-10 seconds."
 
 def run_code(question, df, history, execute=True, retries=3):
     cols   = str(list(df.columns))
@@ -313,7 +326,6 @@ def run_code(question, df, history, execute=True, retries=3):
         "content": f"DataFrame info:\n{info}\n\nQuestion: {question}"
     })
 
-    raw = ""
     for attempt in range(retries):
         try:
             r = client.chat.completions.create(
@@ -335,7 +347,11 @@ def run_code(question, df, history, execute=True, retries=3):
                 exec(clean, {"df": df, "st": st, "pd": pd, "np": np})
             return clean, None
         except Exception as e:
-            if attempt < retries - 1:
+            if "429" in str(e) and attempt < retries - 1:
+                wait = 2 ** attempt + 2
+                st.toast(f"⏳ System busy (Rate Limit). Retrying in {wait}s...", icon="📊")
+                time.sleep(wait)
+            elif attempt < retries - 1:
                 time.sleep(1)
             else:
                 return raw, str(e)
@@ -415,9 +431,20 @@ if uploaded_file:
         final_q = user_q if user_q else (sel_q if sel_q != "Choose or type below..." else None)
 
         if final_q:
+            # PERFORMANCE FIX: Clear inputs to prevent infinite loop on rerun
+            if user_q: st.session_state.ask_input = ""
+            if sel_q != "Choose or type below...": st.session_state.quick_q = "Choose or type below..."
+
             # Detect if user asks for chart/graph
             chart_keywords = ["chart", "graph", "plot", "map", "trend", "visualize"]
             is_chart_q = any(k in final_q.lower() for k in chart_keywords)
+
+            # FALLBACK: If the file is small, use the entire text instead of chunks
+            context_chunks = []
+            if len(text.split()) < 500:
+                context_chunks = [text]
+            else:
+                context_chunks = retrieve_chunks(final_q, vectorizer, tfidf_matrix, chunks)
 
             if is_chart_q and df is not None:
                 with st.spinner("📊 Analyzing data for visualization..."):
@@ -435,9 +462,8 @@ if uploaded_file:
                             "question": final_q,
                             "answer": f"I tried to generate a chart but ran into an issue: {error}. Let me give you a text summary instead."
                         })
-                        # Fallback to text
-                        rel = retrieve_chunks(final_q, vectorizer, tfidf_matrix, chunks)
-                        ans = ask_ai(final_q, rel, st.session_state.chat_history)
+                        # Use context_chunks
+                        ans = ask_ai(final_q, context_chunks, st.session_state.chat_history)
                         st.session_state.chat_history[-1]["answer"] += f"\n\n--- Summary ---\n{ans}"
                         st.rerun()
             
@@ -445,22 +471,18 @@ if uploaded_file:
                 # User asked for chart on non-tabular file
                 st.session_state.chat_history.append({
                     "question": final_q,
-                    "answer": "I'd love to generate a chart, but this file (like an image or PDF) doesn't contain the structured data needed for graphs. Here's what I can tell you about the content instead:",
+                    "answer": "I'd love to generate a chart, but this file doesn't contain the structured data needed for graphs. Here's a search-based answer for you:",
                 })
                 with st.spinner("🔍 Reading content..."):
-                    rel = retrieve_chunks(final_q, vectorizer, tfidf_matrix, chunks)
-                with st.spinner("🤖 Summarizing..."):
-                    ans = ask_ai(final_q, rel, st.session_state.chat_history)
+                    ans = ask_ai(final_q, context_chunks, st.session_state.chat_history)
                     st.session_state.chat_history[-1]["answer"] += f"\n\n{ans}"
                     st.rerun()
 
             else:
                 # Normal text question
-                with st.spinner("🔍 Searching..."):
-                    rel = retrieve_chunks(final_q, vectorizer, tfidf_matrix, chunks)
-                with st.spinner("🤖 Generating answer..."):
+                with st.spinner("🔍 Reviewing file..."):
                     try:
-                        ans = ask_ai(final_q, rel, st.session_state.chat_history)
+                        ans = ask_ai(final_q, context_chunks, st.session_state.chat_history)
                         st.session_state.chat_history.append({"question": final_q, "answer": ans})
                         st.rerun()
                     except Exception as e:
