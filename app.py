@@ -14,7 +14,7 @@ st.title("🧠 InsightX RAG: Ask Anything About Any File")
 st.caption("True RAG system — OCR, code execution, large context, any file type.")
 
 # ── API KEY ───────────────────────────────────────────────────────────────────
-HARDCODED_KEY = "AIzaSyDBLWRjQPhdwKWIPU39eJa9921jJAFg7m4"
+HARDCODED_KEY = "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"
 
 api_key = ""
 try:
