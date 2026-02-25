@@ -29,35 +29,27 @@ if not api_key or api_key == "PASTE_YOUR_GROQ_API_KEY_HERE":
 client = Groq(api_key=api_key)
 
 # ── CONSTANTS ─────────────────────────────────────────────────────────────────
-MAX_FILE_MB   = 200
-MAX_CSV_ROWS  = 10000   # rows for RAG text (full df for calculator)
-MAX_WORDS     = 50000   # words fed into TF-IDF
-TOP_K         = 3       # chunks retrieved per question
-CONTEXT_CAP   = 3500    # chars sent to Groq
-MAX_OUT_TOKENS= 600     # Groq response tokens
-
-# ── LIGHTWEIGHT INSTALL (only what's truly needed) ────────────────────────────
-@st.cache_resource
-def install_packages():
-    import subprocess
-    for pkg in ["pypdf", "python-docx", "python-pptx", "openpyxl",
-                "Pillow", "pytesseract", "pdf2image"]:
-        subprocess.run(["pip", "install", pkg, "-q"], capture_output=True)
-    subprocess.run(["apt-get", "install", "-y", "-q",
-                    "tesseract-ocr", "poppler-utils"], capture_output=True)
-
-install_packages()
+MAX_FILE_MB    = 1000    # Increased to 1GB as per user requirement
+MAX_RAG_ROWS   = 2000    # Reduced from 10,000 to improve memory/lag
+MAX_WORDS      = 30000   # Optimized for TF-IDF
+TOP_K          = 3
+CONTEXT_CAP    = 4000
+MAX_OUT_TOKENS = 600
 
 # ── FILE EXTRACTORS ───────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def extract_text_from_csv(file_bytes):
+    # Use chunking for reading large CSVs if possible, or just read it
     df = pd.read_csv(io.BytesIO(file_bytes))
     total = len(df)
     text  = f"CSV | Rows: {total:,} | Columns: {list(df.columns)}\n\n"
-    if total > MAX_CSV_ROWS:
-        sample = df.sample(n=MAX_CSV_ROWS, random_state=42)
-        text += f"(Sample of {MAX_CSV_ROWS:,}/{total:,} rows for AI. Full data in Precise Calculator.)\n\n"
-        text += sample.to_string(index=False)
+    
+    # PERFORMANCE FIX: Sample fewer rows for the "Ask AI" string representation
+    # 10,000 rows was causing browser lag. 2,000 is usually enough for key patterns.
+    if total > MAX_RAG_ROWS:
+        sample = df.sample(n=MAX_RAG_ROWS, random_state=42)
+        text += f"(Representative sample of {MAX_RAG_ROWS:,}/{total:,} rows for AI context.)\n\n"
+        text += sample.to_string(index=False, max_rows=MAX_RAG_ROWS)
     else:
         text += df.to_string(index=False)
     return text, df
@@ -185,28 +177,30 @@ def extract_content(uploaded_file):
 
     return text, df
 
-# ── FAST TF-IDF RAG (replaces slow sentence-transformers + FAISS) ─────────────
+# ── FAST TF-IDF RAG ───────────────────────────────────────────────────────────
 @st.cache_resource
 def build_tfidf_index(text, file_name):
-    """Build TF-IDF index — 100x faster than sentence-transformers."""
-    words  = text.split()
+    """Build TF-IDF index — Memory optimized."""
+    # Efficiently get words without creating multiple large lists
+    # Use re.finditer or a generator if memory is super tight, but split() is okay if limited
+    words = text.split()
     if len(words) > MAX_WORDS:
-        step  = max(len(words) // MAX_WORDS, 1)
+        step = max(len(words) // MAX_WORDS, 1)
         words = words[::step][:MAX_WORDS]
-        text  = " ".join(words)
 
-    # Split into chunks
-    chunk_size, overlap = 300, 50
+    # Split into chunks efficiently
+    chunk_size, overlap = 400, 100
     chunks = []
-    i = 0
-    while i < len(words):
-        chunks.append(" ".join(words[i:i + chunk_size]))
-        i += chunk_size - overlap
+    for i in range(0, len(words), chunk_size - overlap):
+        chunk = " ".join(words[i:i + chunk_size])
+        if chunk.strip():
+            chunks.append(chunk)
 
     if not chunks:
         return None, None, []
 
-    vectorizer  = TfidfVectorizer(max_features=5000, stop_words="english")
+    # Filter out extremely common or short chunks
+    vectorizer = TfidfVectorizer(max_features=4000, stop_words="english", ngram_range=(1, 2))
     tfidf_matrix = vectorizer.fit_transform(chunks)
     return vectorizer, tfidf_matrix, chunks
 
