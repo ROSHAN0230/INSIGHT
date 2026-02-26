@@ -453,7 +453,8 @@ if uploaded_file:
                 st.session_state.ask_input = ""
             elif st.session_state.quick_q != "Choose or type below...":
                 st.session_state.pending_q = st.session_state.quick_q
-                st.session_state.quick_q = "Choose or type below..."
+                # Do not reset quick_q here; it causes an exception. 
+                # It will be reset naturally on the next rerun.
 
         quick_qs = st.session_state.suggestions
         st.selectbox("⚡ Quick Questions:", ["Choose or type below..."] + quick_qs, 
