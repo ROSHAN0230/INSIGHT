@@ -12,7 +12,6 @@ st.title("🧠 InsightX AI: Ask Anything About Any File")
 st.caption("Lightning-fast RAG — any file, any question, instant answers.")
 
 # ── API KEY ───────────────────────────────────────────────────────────────────
-HARDCODED_KEY = "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"
 api_key = ""
 try:
     api_key = st.secrets["GROQ_API_KEY"]
@@ -20,16 +19,16 @@ except Exception:
     pass
 if not api_key:
     api_key = os.environ.get("GROQ_API_KEY", "")
-if not api_key:
-    api_key = HARDCODED_KEY
+
 if not api_key or api_key == "PASTE_YOUR_GROQ_API_KEY_HERE":
-    st.error("Please paste your Groq API key into line 14 of app.py")
+    st.error("Missing Groq API Key.")
+    st.info("Please set 'GROQ_API_KEY' in your Environment Variables or Streamlit Secrets.")
     st.stop()
 
 client = Groq(api_key=api_key)
 
 # ── CONSTANTS ─────────────────────────────────────────────────────────────────
-MAX_FILE_MB    = 1000    # Increased to 1GB as per user requirement
+MAX_FILE_MB    = 1024    # Increased to 1GB (1024MB) as per user requirement
 MAX_RAG_ROWS   = 2000    # Reduced from 10,000 to improve memory/lag
 MAX_WORDS      = 30000   # Optimized for TF-IDF
 TOP_K          = 3
@@ -191,14 +190,28 @@ def extract_content(uploaded_file):
     return text, df
 
 @st.cache_data(show_spinner=False)
-def generate_suggestions(text, file_name):
-    """Generate 5 context-aware questions about the file content with retry logic."""
-    prompt = (
-        f"Based on the following file content from '{file_name}', "
-        "generate 5-7 diverse and insightful questions a user might ask. "
-        "Provide ONLY the questions, one per line, no numbering or extra text.\n\n"
-        f"Content Sample:\n{text[:5000]}"
-    )
+def generate_suggestions(text, file_name, is_tabular=False):
+    """Generate context-aware questions grounded in the file content."""
+    if is_tabular:
+        prompt = (
+            f"Based on the following data sample from '{file_name}', "
+            "generate 5-7 precise questions that can be answered by analyzing this data. "
+            "Focus on trends, totals, averages, or specific column relationships. "
+            "STRICT RULE: Only generate questions that can be answered using the provided columns and data. "
+            "Avoid general or imaginative questions. "
+            "Provide ONLY the questions, one per line, no numbering or extra text.\n\n"
+            f"Data Sample:\n{text[:5000]}"
+        )
+    else:
+        prompt = (
+            f"Based on the following text from '{file_name}', "
+            "generate 5-7 insightful questions that can be answered using this content. "
+            "Focus on summaries, key facts, or specific details mentioned in the text. "
+            "STRICT RULE: Only generate questions that can be answered directly by the provided text. "
+            "Avoid external knowledge or assumptions. "
+            "Provide ONLY the questions, one per line, no numbering or extra text.\n\n"
+            f"Content Sample:\n{text[:5000]}"
+        )
     for attempt in range(4):
         try:
             r = client.chat.completions.create(
@@ -343,6 +356,11 @@ def run_code(question, df, history, execute=True, retries=3):
                                 line.strip(), re.IGNORECASE)
             ).strip()
             
+            # Basic sanitization
+            dangerous_tokens = ["os.", "sys.", "subprocess", "open(", "eval(", "exec(", "shutil", "builtins"]
+            if any(token in clean for token in dangerous_tokens):
+                return clean, "Security blocked: Generated code contains potentially unsafe operations."
+
             if execute:
                 exec(clean, {"df": df, "st": st, "pd": pd, "np": np})
             return clean, None
@@ -403,7 +421,8 @@ if uploaded_file:
         st.session_state.pending_q    = None
         # PERFORMANCE FIX: Pre-generate dynamic suggestions
         with st.spinner("🧠 Preparing smart suggestions..."):
-            st.session_state.suggestions = generate_suggestions(text, uploaded_file.name)
+            is_tabular = df is not None
+            st.session_state.suggestions = generate_suggestions(text, uploaded_file.name, is_tabular)
 
     # Guide table
     st.markdown("""
