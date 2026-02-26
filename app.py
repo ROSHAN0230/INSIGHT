@@ -537,8 +537,10 @@ if uploaded_file:
                     if chat.get("type") == "chart" and chat.get("code") and df is not None:
                         try:
                             exec(chat["code"], {"df": df, "st": st, "pd": pd, "np": np})
-                        except Exception:
-                            st.info("Chart preview unavailable.")
+                        except Exception as e:
+                            st.info(f"Chart preview unavailable: {e}")
+                            with st.expander("Show code used"):
+                                st.code(chat["code"], language="python")
                     
                     c1, c2 = st.columns(2)
                     with c1:
