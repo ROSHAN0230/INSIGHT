@@ -175,8 +175,16 @@ def extract_content(uploaded_file):
     elif name.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
         text, df = extract_text_from_image(file_bytes)
     elif name.endswith(".json"):
-        data = json.loads(file_bytes.decode("utf-8", errors="ignore"))
-        text, df = json.dumps(data, indent=2)[:8000], None
+        try:
+            data = json.loads(file_bytes.decode("utf-8", errors="ignore"))
+            text = json.dumps(data, indent=2)[:8000]
+            # If JSON is a list of dicts, it's tabular! 
+            if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+                df = pd.DataFrame(data)
+            else:
+                df = None
+        except Exception:
+            text, df = "Error reading JSON", None
     elif name.endswith(".zip"):
         text, df = extract_text_from_zip(file_bytes)
     else:
