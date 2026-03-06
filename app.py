@@ -393,16 +393,54 @@ uploaded_file = st.sidebar.file_uploader(
 )
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
-if uploaded_file:
-    # Extract
-    with st.spinner(f"📖 Reading {uploaded_file.name}..."):
-        text, df = extract_content(uploaded_file)
+# Handle Sample Data
+if "uploaded_df" not in st.session_state:
+    st.session_state.uploaded_df = None
+if "uploaded_text" not in st.session_state:
+    st.session_state.uploaded_text = None
 
-    size_mb    = len(uploaded_file.getvalue()) / (1024 * 1024)
+st.sidebar.markdown("---")
+st.sidebar.subheader("🚀 Demo Mode")
+if st.sidebar.button("Load Sample Transaction Dataset (250k)"):
+    data = {
+        "Transaction_ID": [f"TXN{i:06d}" for i in range(250000)],
+        "Timestamp": pd.date_range("2024-01-01", periods=250000, freq="min"),
+        "Amount": np.random.uniform(10, 5000, 250000).round(2),
+        "Category": np.random.choice(["Food", "Entertainment", "Education", "Health", "Travel"], 250000),
+        "Device_Type": np.random.choice(["iOS", "Android"], 250000),
+        "Network_Type": np.random.choice(["5G", "WiFi", "4G"], 250000),
+        "Age": np.random.randint(18, 70, 250000),
+        "State": np.random.choice(["Maharashtra", "Delhi", "Karnataka", "Tamil Nadu", "Gujarat"], 250000),
+        "Status": np.random.choice(["Success", "Failed"], 250000, p=[0.95, 0.05]),
+        "Fraud_Flag": np.random.choice([0, 1], 250000, p=[0.99, 0.01])
+    }
+    st.session_state.uploaded_df = pd.DataFrame(data)
+    st.session_state.uploaded_text = "Sample Digital Payments Dataset | 250,000 Transactions | Source: Techfest Synthetic Data"
+    st.session_state.last_file = "sample_transactions.csv"
+    st.rerun()
+
+if uploaded_file or st.session_state.uploaded_df is not None:
+    # Extract
+    if uploaded_file:
+        with st.spinner(f"📖 Reading {uploaded_file.name}..."):
+            text, df = extract_content(uploaded_file)
+            # Reset sample if new file uploaded
+            st.session_state.uploaded_df = None
+            filename = uploaded_file.name
+            size_mb  = len(uploaded_file.getvalue()) / (1024 * 1024)
+    else:
+        df = st.session_state.uploaded_df
+        text = st.session_state.uploaded_text
+        filename = st.session_state.last_file
+        size_mb  = 0.0
+
     word_count = len(text.split())
 
-    st.sidebar.success(f"✅ {uploaded_file.name}")
-    st.sidebar.info(f"📝 {word_count:,} words | {size_mb:.2f} MB")
+    st.sidebar.success(f"✅ {filename}")
+    if size_mb > 0:
+        st.sidebar.info(f"📝 {word_count:,} words | {size_mb:.2f} MB")
+    else:
+        st.sidebar.info(f"📝 {word_count:,} words | Demo Dataset")
 
     # Build TF-IDF index (fast!)
     with st.spinner("⚡ Indexing file (TF-IDF)..."):
@@ -422,15 +460,15 @@ if uploaded_file:
     if "pending_q" not in st.session_state:
         st.session_state.pending_q = None
 
-    if st.session_state.last_file != uploaded_file.name:
+    if st.session_state.last_file != filename:
         st.session_state.chat_history = []
         st.session_state.calc_history = []
-        st.session_state.last_file    = uploaded_file.name
+        st.session_state.last_file    = filename
         st.session_state.pending_q    = None
         # PERFORMANCE FIX: Pre-generate dynamic suggestions
         with st.spinner("🧠 Preparing smart suggestions..."):
             is_tabular = df is not None
-            st.session_state.suggestions = generate_suggestions(text, uploaded_file.name, is_tabular)
+            st.session_state.suggestions = generate_suggestions(text, filename, is_tabular)
 
     # Guide table
     st.markdown("""
@@ -442,9 +480,69 @@ if uploaded_file:
 | 👀 Preview | See extracted content & file stats | — |
 """)
 
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["💬 Ask AI", "⚡ Precise Calculator", "📊 Data Analysis", "👀 Preview"]
+    tab0, tab1, tab2, tab3, tab4 = st.tabs(
+        ["🏆 Leadership Insights", "💬 Ask AI", "⚡ Precise Calculator", "📊 Data Analysis", "👀 Preview"]
     )
+
+    # ── TAB 0: LEADERSHIP INSIGHTS (AUTO) ─────────────────────────────────────
+    with tab0:
+        st.subheader("🏆 Leadership Insights Dashboard")
+        st.markdown("*Automatically analyzing Key Hackathon Dimensions...*")
+        
+        if df is not None:
+            # 1. Descriptive
+            with st.expander("📊 1. Descriptive Analysis", expanded=True):
+                c1, c2, c3 = st.columns(3)
+                if 'Amount' in df.columns or 'amount' in df.columns:
+                    col = 'Amount' if 'Amount' in df.columns else 'amount'
+                    c1.metric("Total Volume", f"₹{df[col].sum():,.0f}")
+                    c2.metric("Avg Transaction", f"₹{df[col].mean():,.2f}")
+                
+                cat_col = next((c for c in df.columns if c.lower() in ['category', 'type', 'industry']), None)
+                if cat_col:
+                    top_cat = df[cat_col].value_counts().idxmax()
+                    c3.metric("Top Category", top_cat)
+                    st.bar_chart(df[cat_col].value_counts().head(5))
+
+            # 2. Comparative
+            with st.expander("📈 2. Comparative Analysis", expanded=True):
+                comp_col = next((c for c in df.columns if c.lower() in ['device_type', 'network_type', 'payment_mode']), None)
+                if comp_col and ('Amount' in df.columns or 'amount' in df.columns):
+                    acol = 'Amount' if 'Amount' in df.columns else 'amount'
+                    st.write(f"**Transaction Value by {comp_col}**")
+                    st.bar_chart(df.groupby(comp_col)[acol].mean())
+                else:
+                    st.info("Upload a dataset with 'Device_Type' or 'Payment_Mode' for comparisons.")
+
+            # 3. User Segmentation
+            with st.expander("👥 3. User Segmentation", expanded=True):
+                age_col = next((c for c in df.columns if c.lower() in ['age', 'user_age']), None)
+                state_col = next((c for c in df.columns if c.lower() in ['state', 'region', 'location']), None)
+                
+                sc1, sc2 = st.columns(2)
+                if age_col:
+                    with sc1:
+                        st.write("**Age Distribution**")
+                        st.line_chart(df[age_col].value_counts().sort_index())
+                if state_col:
+                    with sc2:
+                        st.write("**Top States**")
+                        st.bar_chart(df[state_col].value_counts().head(5))
+
+            # 4. Risk Metrics
+            with st.expander("🛡️ 4. Risk & Operational Metrics", expanded=True):
+                fraud_col = next((c for c in df.columns if c.lower() in ['fraud_flag', 'is_fraud', 'flagged']), None)
+                status_col = next((c for c in df.columns if c.lower() in ['status', 'result', 'success']), None)
+                
+                rc1, rc2 = st.columns(2)
+                if fraud_col:
+                    fraud_rate = (df[fraud_col].astype(int).mean() * 100)
+                    rc1.metric("Fraud Rate", f"{fraud_rate:.2f}%")
+                if status_col:
+                    fail_rate = (df[status_col].str.lower() != 'success').astype(int).mean() * 100
+                    rc2.metric("Failure Rate", f"{fail_rate:.2f}%")
+        else:
+            st.warning("Please upload a CSV or Excel file to see Leadership Insights.")
 
     # ── TAB 1: ASK AI ─────────────────────────────────────────────────────────
     with tab1:
