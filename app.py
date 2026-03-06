@@ -444,7 +444,7 @@ if uploaded_file or st.session_state.uploaded_df is not None:
 
     # Build TF-IDF index (fast!)
     with st.spinner("⚡ Indexing file (TF-IDF)..."):
-        vectorizer, tfidf_matrix, chunks = build_tfidf_index(text, uploaded_file.name)
+        vectorizer, tfidf_matrix, chunks = build_tfidf_index(text, filename)
 
     st.sidebar.info(f"🧩 {len(chunks)} chunks | ⚡ TF-IDF indexed")
 
@@ -539,7 +539,7 @@ if uploaded_file or st.session_state.uploaded_df is not None:
                     fraud_rate = (df[fraud_col].astype(int).mean() * 100)
                     rc1.metric("Fraud Rate", f"{fraud_rate:.2f}%")
                 if status_col:
-                    fail_rate = (df[status_col].str.lower() != 'success').astype(int).mean() * 100
+                    fail_rate = (df[status_col].str.lower() != 'success').map(int).mean() * 100
                     rc2.metric("Failure Rate", f"{fail_rate:.2f}%")
         else:
             st.warning("Please upload a CSV or Excel file to see Leadership Insights.")
@@ -806,3 +806,4 @@ else:
 5. **Data Analysis** → auto charts, quality checks, full stats
 6. **Download** answers or data anytime
 """)
+
