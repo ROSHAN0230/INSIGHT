@@ -7,9 +7,89 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # ── PAGE SETUP ────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="InsightX AI | Universal RAG", layout="wide")
-st.title("🧠 InsightX AI: Ask Anything About Any File")
-st.caption("Lightning-fast RAG — any file, any question, instant answers.")
+st.set_page_config(page_title="InsightX AI | Universal RAG", layout="wide", page_icon="🧠")
+
+# ── PREMIUM CSS ───────────────────────────────────────────────────────────────
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@300;500;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
+    
+    h1, h2, h3, .stHeader {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 700;
+        background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    
+    .stApp {
+        background: #0f172a;
+        color: #f1f5f9;
+    }
+    
+    /* Glassmorphism sidebar */
+    [data-testid="stSidebar"] {
+        background-color: rgba(30, 41, 59, 0.7) !important;
+        backdrop-filter: blur(12px);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Custom Card Style */
+    div.stMetric {
+        background: rgba(30, 41, 59, 0.5);
+        padding: 20px;
+        border-radius: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: transform 0.3s ease;
+    }
+    div.stMetric:hover {
+        transform: translateY(-5px);
+        border-color: #6366f1;
+    }
+    
+    /* Tab Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background-color: transparent;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        border-radius: 10px 10px 0 0;
+        padding: 0 20px;
+        background-color: rgba(30, 41, 59, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #94a3b8;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #6366f1 !important;
+        color: white !important;
+    }
+    
+    /* Chat bubbles */
+    [data-testid="stChatMessage"] {
+        background: rgba(30, 41, 59, 0.5);
+        border-radius: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 10px;
+    }
+    
+    /* Animation */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .stApp > div {
+        animation: fadeIn 0.8s ease-out;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("🧠 InsightX AI")
+st.caption("The future of Universal RAG & Data Intelligence — Lightning fast, 100% Secure.")
 
 # ── API KEY ───────────────────────────────────────────────────────────────────
 api_key = ""
@@ -167,7 +247,10 @@ def extract_text_from_zip(file_bytes):
                 try:
                     with z.open(name) as f:
                         text += f"\n--- {name} ---\n"
-                        text += f.read().decode("utf-8", errors="ignore")[:2000] + "\n"
+                        # Use string slicing safely
+                        raw_content = f.read().decode("utf-8", errors="ignore")
+                        text += (raw_content[:2000] + "...") if len(raw_content) > 2000 else raw_content
+                        text += "\n"
                 except Exception:
                     pass
     return text, None
@@ -368,9 +451,12 @@ def run_code(question, df, history, execute=True, retries=3):
             "Return ONLY raw Python. No markdown, no backticks, no explanation."
         )
     }]
-    for c in history[-2:]:
-        messages.append({"role": "user",      "content": c["question"]})
-        messages.append({"role": "assistant", "content": c.get("answer", "")})
+    # Safety guard for history slicing
+    if history and isinstance(history, list):
+        for c in history[-2:]:
+            messages.append({"role": "user",      "content": c["question"]})
+            messages.append({"role": "assistant", "content": c.get("answer", "")})
+    
     messages.append({
         "role": "user",
         "content": f"DataFrame info:\n{info}\n\nQuestion: {question}"
@@ -410,6 +496,33 @@ def run_code(question, df, history, execute=True, retries=3):
                 time.sleep(1)
             else:
                 return raw, str(e)
+
+def auto_generate_pulse(df, chunks):
+    """Proactively analyze the file for quick insights."""
+    if df is not None:
+        info = f"Cols: {list(df.columns)}\nRows: {len(df)}\nSample: {df.head(2).to_string()}"
+        prompt = (
+            f"As a Senior Data Scientist, provide exactly 3 'Bullet Point' executive observations "
+            f"based on this dataset summary:\n{info}\n"
+            "Focus on health, trends, or outliers. Keep each point under 10 words."
+        )
+    else:
+        text_sample = "\n".join(chunks[:3])
+        prompt = (
+            f"Summarize the key intent of this document in exactly 3 'Bullet Point' observations:\n"
+            f"{text_sample[:2000]}\n"
+            "Keep each point under 10 words."
+        )
+    
+    try:
+        r = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=150,
+        )
+        return r.choices[0].message.content.strip()
+    except Exception:
+        return "• High-speed RAG ready.\n• Data structure detected.\n• Awaiting analysis."
 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
 st.sidebar.header("📂 Upload Any File")
@@ -498,6 +611,15 @@ if uploaded_file or st.session_state.uploaded_df is not None:
         with st.spinner("🧠 Preparing smart suggestions..."):
             is_tabular = df is not None
             st.session_state.suggestions = generate_suggestions(text, filename, is_tabular)
+        
+        # PREMIUM FEATURE: Generate Auto-Pulse
+        with st.spinner("⚡ AI Pulse active..."):
+            st.session_state.data_pulse = auto_generate_pulse(df, chunks)
+
+    # Sidebar Data Pulse Widget
+    if "data_pulse" in st.session_state:
+        st.sidebar.markdown("### 📊 Data Pulse")
+        st.sidebar.info(st.session_state.data_pulse)
 
     # Guide table
     st.markdown("""
@@ -516,22 +638,32 @@ if uploaded_file or st.session_state.uploaded_df is not None:
     # ── TAB 0: LEADERSHIP INSIGHTS (AUTO) ─────────────────────────────────────
     with tab0:
         st.subheader("🏆 Leadership Insights Dashboard")
-        st.markdown("*Automatically analyzing Key Hackathon Dimensions...*")
         
         if df is not None:
+            # Executive Summary Section
+            st.markdown("### 📄 Executive Summary")
+            st.write(st.session_state.get("data_pulse", "Analyzing..."))
+            
+            report_txt = f"INSIGHTX AI EXECUTIVE REPORT\nFile: {filename}\nDate: {pd.Timestamp.now()}\n\n"
+            report_txt += "--- AI OBSERVATIONS ---\n" + st.session_state.get("data_pulse", "") + "\n\n"
+            
             # 1. Descriptive
             with st.expander("📊 1. Descriptive Analysis", expanded=True):
                 c1, c2, c3 = st.columns(3)
                 if 'Amount' in df.columns or 'amount' in df.columns:
                     col = 'Amount' if 'Amount' in df.columns else 'amount'
-                    c1.metric("Total Volume", f"₹{df[col].sum():,.0f}")
-                    c2.metric("Avg Transaction", f"₹{df[col].mean():,.2f}")
+                    val_sum = df[col].sum()
+                    val_avg = df[col].mean()
+                    c1.metric("Total Volume", f"₹{val_sum:,.0f}")
+                    c2.metric("Avg Transaction", f"₹{val_avg:,.2f}")
+                    report_txt += f"Total Volume: ₹{val_sum:,.0f}\nAvg Transaction: ₹{val_avg:,.2f}\n"
                 
                 cat_col = next((c for c in df.columns if c.lower() in ['category', 'type', 'industry']), None)
                 if cat_col:
                     top_cat = df[cat_col].value_counts().idxmax()
                     c3.metric("Top Category", top_cat)
                     st.bar_chart(df[cat_col].value_counts().head(5))
+                    report_txt += f"Top Category: {top_cat}\n"
 
             # 2. Comparative
             with st.expander("📈 2. Comparative Analysis", expanded=True):
@@ -570,8 +702,14 @@ if uploaded_file or st.session_state.uploaded_df is not None:
                 if status_col:
                     fail_rate = (df[status_col].str.lower() != 'success').map(int).mean() * 100
                     rc2.metric("Failure Rate", f"{fail_rate:.2f}%")
+            
+            st.divider()
+            st.download_button("📥 Download Executive Report", data=report_txt, 
+                               file_name=f"Executive_Report_{filename}.txt", mime="text/plain")
         else:
-            st.warning("Please upload a CSV or Excel file to see Leadership Insights.")
+            st.subheader("📄 Document Intelligence Summary")
+            st.write(st.session_state.get("data_pulse", "Analyzing document..."))
+            st.info("Upload a CSV/Excel for the full Leadership Dashboard.")
 
     # ── TAB 1: ASK AI ─────────────────────────────────────────────────────────
     with tab1:
