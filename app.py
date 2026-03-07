@@ -51,32 +51,51 @@ def get_csv_download(df):
 
 @st.cache_data(show_spinner=False)
 def extract_text_from_csv(file_bytes):
-    # Use chunking for reading large CSVs if possible, or just read it
-    df = pd.read_csv(io.BytesIO(file_bytes))
-    total = len(df)
-    text  = f"CSV | Rows: {total:,} | Columns: {list(df.columns)}\n\n"
-    
-    # PERFORMANCE FIX: Sample fewer rows for the "Ask AI" string representation
-    # 10,000 rows was causing browser lag. 2,000 is usually enough for key patterns.
-    if total > MAX_RAG_ROWS:
-        sample = df.sample(n=MAX_RAG_ROWS, random_state=42)
-        text += f"(Representative sample of {MAX_RAG_ROWS:,}/{total:,} rows for AI context.)\n\n"
-        text += sample.to_string(index=False, max_rows=MAX_RAG_ROWS)
-    else:
-        text += df.to_string(index=False)
-    return text, df
+    # Use low_memory=True and dtype inference to save RAM
+    # We read the full file for 'Precise Calculator' but optimize its storage
+    try:
+        df = pd.read_csv(io.BytesIO(file_bytes), low_memory=True)
+        
+        # DOWNCASTING: Convert float64 to float32, int64 to int32 where possible
+        # This saves ~50% RAM while maintaining high precision for calculations.
+        for col in df.select_dtypes(include=['float']).columns:
+            df[col] = pd.to_numeric(df[col], downcast='float')
+        for col in df.select_dtypes(include=['integer']).columns:
+            df[col] = pd.to_numeric(df[col], downcast='integer')
+            
+        total = len(df)
+        text  = f"CSV | Rows: {total:,} | Columns: {list(df.columns)}\n\n"
+        
+        if total > MAX_RAG_ROWS:
+            sample = df.sample(n=MAX_RAG_ROWS, random_state=42)
+            text += f"(Representative sample of {MAX_RAG_ROWS:,}/{total:,} rows for AI context.)\n\n"
+            text += sample.to_string(index=False, max_rows=MAX_RAG_ROWS)
+        else:
+            text += df.to_string(index=False)
+        return text, df
+    except Exception as e:
+        st.error(f"Error parsing CSV: {e}")
+        return None, None
 
 @st.cache_data(show_spinner=False)
 def extract_text_from_excel(file_bytes):
-    xl  = pd.ExcelFile(io.BytesIO(file_bytes))
-    txt = ""
-    fdf = None
-    for sheet in xl.sheet_names:
-        df  = xl.parse(sheet)
-        fdf = fdf if fdf is not None else df
-        txt += f"\n--- Sheet: {sheet} ---\nRows:{len(df)} Cols:{list(df.columns)}\n"
-        txt += df.head(300).to_string(index=False) + "\n"
-    return txt, fdf
+    try:
+        # Use openpyxl for engine and read head for preview to save memory on huge files
+        xl  = pd.ExcelFile(io.BytesIO(file_bytes), engine='openpyxl')
+        txt = ""
+        fdf = None
+        for sheet in xl.sheet_names:
+            df  = xl.parse(sheet)
+            # Downcast to save RAM
+            for col in df.select_dtypes(include=['float']).columns:
+                df[col] = pd.to_numeric(df[col], downcast='float')
+            if fdf is None: fdf = df
+            txt += f"\n--- Sheet: {sheet} ---\nRows:{len(df)} Cols:{list(df.columns)}\n"
+            txt += df.head(100).to_string(index=False) + "\n"
+        return txt, fdf
+    except Exception as e:
+        st.error(f"Excel Error: {e}")
+        return None, None
 
 @st.cache_data(show_spinner=False)
 def extract_text_from_pdf(file_bytes):
@@ -154,48 +173,55 @@ def extract_text_from_zip(file_bytes):
     return text, None
 
 def extract_content(uploaded_file):
-    name       = uploaded_file.name.lower()
-    file_bytes = uploaded_file.getvalue()
-    size_mb    = len(file_bytes) / (1024 * 1024)
+    try:
+        name       = uploaded_file.name.lower()
+        file_bytes = uploaded_file.getvalue()
+        size_mb    = len(file_bytes) / (1024 * 1024)
 
-    if size_mb > MAX_FILE_MB:
-        st.error(f"File too large ({size_mb:.1f}MB). Max: {MAX_FILE_MB}MB.")
+        if size_mb > MAX_FILE_MB:
+            st.error(f"File too large ({size_mb:.1f}MB). Max: {MAX_FILE_MB}MB.")
+            st.stop()
+
+        if name.endswith(".csv"):
+            text, df = extract_text_from_csv(file_bytes)
+        elif name.endswith((".xlsx", ".xls")):
+            text, df = extract_text_from_excel(file_bytes)
+        elif name.endswith(".pdf"):
+            text, df = extract_text_from_pdf(file_bytes)
+        elif name.endswith(".docx"):
+            text, df = extract_text_from_docx(file_bytes)
+        elif name.endswith(".pptx"):
+            text, df = extract_text_from_pptx(file_bytes)
+        elif name.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
+            text, df = extract_text_from_image(file_bytes)
+        elif name.endswith(".json"):
+            try:
+                data = json.loads(file_bytes.decode("utf-8", errors="ignore"))
+                text = json.dumps(data, indent=2)[:8000]
+                if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+                    df = pd.DataFrame(data)
+                else:
+                    df = None
+            except Exception:
+                text, df = "Error reading JSON", None
+        elif name.endswith(".zip"):
+            text, df = extract_text_from_zip(file_bytes)
+        else:
+            text = file_bytes.decode("utf-8", errors="ignore")
+            df   = None
+
+        if not text or len(text.strip()) < 10:
+            st.error("File appears empty or unreadable.")
+            st.stop()
+
+        return text, df
+    except MemoryError:
+        st.error("📉 OUT OF MEMORY: This file is too large for the current server RAM (1GB limit).")
+        st.info("Try uploading a smaller version of the file or a CSV with fewer columns.")
         st.stop()
-
-    if name.endswith(".csv"):
-        text, df = extract_text_from_csv(file_bytes)
-    elif name.endswith((".xlsx", ".xls")):
-        text, df = extract_text_from_excel(file_bytes)
-    elif name.endswith(".pdf"):
-        text, df = extract_text_from_pdf(file_bytes)
-    elif name.endswith(".docx"):
-        text, df = extract_text_from_docx(file_bytes)
-    elif name.endswith(".pptx"):
-        text, df = extract_text_from_pptx(file_bytes)
-    elif name.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
-        text, df = extract_text_from_image(file_bytes)
-    elif name.endswith(".json"):
-        try:
-            data = json.loads(file_bytes.decode("utf-8", errors="ignore"))
-            text = json.dumps(data, indent=2)[:8000]
-            # If JSON is a list of dicts, it's tabular! 
-            if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
-                df = pd.DataFrame(data)
-            else:
-                df = None
-        except Exception:
-            text, df = "Error reading JSON", None
-    elif name.endswith(".zip"):
-        text, df = extract_text_from_zip(file_bytes)
-    else:
-        text = file_bytes.decode("utf-8", errors="ignore")
-        df   = None
-
-    if not text or len(text.strip()) < 10:
-        st.error("File appears empty or unreadable.")
+    except Exception as e:
+        st.error(f"⚠️ Unexpected Error: {e}")
         st.stop()
-
-    return text, df
 
 @st.cache_data(show_spinner=False)
 def generate_suggestions(text, file_name, is_tabular=False):
@@ -247,12 +273,16 @@ def generate_suggestions(text, file_name, is_tabular=False):
 @st.cache_resource
 def build_tfidf_index(text, file_name):
     """Build TF-IDF index — Memory optimized."""
-    # Efficiently get words without creating multiple large lists
-    # Use re.finditer or a generator if memory is super tight, but split() is okay if limited
+    if not text: return None, None, []
+    
+    # Use a more memory-efficient way to sample if text is huge
+    if len(text) > 2_000_000: # ~2MB of text
+        text = text[:2_000_000]
+        st.toast("⚠️ Large text file detected. Indexing the first 2 million characters for RAG.", icon="ℹ️")
+
     words = text.split()
     if len(words) > MAX_WORDS:
-        step = max(len(words) // MAX_WORDS, 1)
-        words = words[::step][:MAX_WORDS]
+        words = words[:MAX_WORDS]
 
     # Split into chunks efficiently
     chunk_size, overlap = 400, 100
@@ -265,8 +295,7 @@ def build_tfidf_index(text, file_name):
     if not chunks:
         return None, None, []
 
-    # Filter out extremely common or short chunks
-    vectorizer = TfidfVectorizer(max_features=4000, stop_words="english", ngram_range=(1, 2))
+    vectorizer = TfidfVectorizer(max_features=2000, stop_words="english", ngram_range=(1, 1))
     tfidf_matrix = vectorizer.fit_transform(chunks)
     return vectorizer, tfidf_matrix, chunks
 
@@ -806,4 +835,3 @@ else:
 5. **Data Analysis** → auto charts, quality checks, full stats
 6. **Download** answers or data anytime
 """)
-
