@@ -91,21 +91,22 @@ st.markdown("""
 st.title("🧠 InsightX AI")
 st.caption("The future of Universal RAG & Data Intelligence — Lightning fast, 100% Secure.")
 
-# ── API KEY ───────────────────────────────────────────────────────────────────
-api_key = ""
-try:
-    api_key = st.secrets["GROQ_API_KEY"]
-except Exception:
-    pass
-if not api_key:
-    api_key = os.environ.get("GROQ_API_KEY", "")
+# ── API KEY HANDLING ──────────────────────────────────────────────────────────
+api_key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY", ""))
+has_api = bool(api_key and api_key != "PASTE_YOUR_GROQ_API_KEY_HERE")
 
-if not api_key or api_key == "PASTE_YOUR_GROQ_API_KEY_HERE":
-    st.error("Missing Groq API Key.")
-    st.info("Please set 'GROQ_API_KEY' in your Environment Variables or Streamlit Secrets.")
-    st.stop()
+if has_api:
+    client = Groq(api_key=api_key)
+else:
+    client = None
 
-client = Groq(api_key=api_key)
+# ── LOGIC GUARD ──
+def check_api():
+    if not has_api:
+        st.warning("⚠️ **Groq API Key Missing**")
+        st.info("To enable AI features, please set `GROQ_API_KEY` in your Streamlit Secrets or Environment Variables.")
+        return False
+    return True
 
 # ── CONSTANTS ─────────────────────────────────────────────────────────────────
 MAX_FILE_MB    = 1024    # Increased to 1GB (1024MB) as per user requirement
@@ -309,6 +310,9 @@ def extract_content(uploaded_file):
 @st.cache_data(show_spinner=False)
 def generate_suggestions(text, file_name, is_tabular=False):
     """Generate context-aware questions grounded in the file content."""
+    if not check_api():
+        return ["Summary of the file", "Key trends", "Data structure help"]
+    
     if is_tabular:
         prompt = (
             f"Based on the following data sample from '{file_name}', "
@@ -393,10 +397,14 @@ def retrieve_chunks(question, vectorizer, tfidf_matrix, chunks):
 
 # ── AI CALLS ──────────────────────────────────────────────────────────────────
 def ask_ai(question, chunks, history, retries=4):
+    if not check_api():
+        return "⚠️ API Key Missing. Please configure it in Streamlit Secrets."
+    
     context = "\n---\n".join(chunks)
     if len(context) > CONTEXT_CAP:
         context = context[:CONTEXT_CAP]
-
+    
+    # ... rest of the function ...
     messages = [{
         "role": "system",
         "content": (
@@ -407,9 +415,10 @@ def ask_ai(question, chunks, history, retries=4):
             "Stay 100% grounded in the uploaded content."
         )
     }]
-    for c in history[-3:]:
-        messages.append({"role": "user",      "content": c["question"]})
-        messages.append({"role": "assistant", "content": c.get("answer", "")})
+    if history and isinstance(history, list):
+        for c in history[-3:]:
+            messages.append({"role": "user",      "content": c["question"]})
+            messages.append({"role": "assistant", "content": c.get("answer", "")})
     messages.append({
         "role": "user",
         "content": f"File content:\n{context}\n\nQuestion: {question}"
@@ -425,7 +434,6 @@ def ask_ai(question, chunks, history, retries=4):
             return r.choices[0].message.content.strip()
         except Exception as e:
             if "429" in str(e) and attempt < retries - 1:
-                # Exponential backoff for rate limits
                 wait = 2 ** attempt + 2
                 st.toast(f"⏳ System busy (Rate Limit). Retrying in {wait}s...", icon="⚠️")
                 time.sleep(wait)
@@ -435,7 +443,11 @@ def ask_ai(question, chunks, history, retries=4):
                 return f"AI Error: {e}. Please try again in 5-10 seconds."
 
 def run_code(question, df, history, execute=True, retries=3):
+    if not check_api():
+        return "⚠️ API Key Missing", "Cannot execute AI logic without key."
+    
     cols   = str(list(df.columns))
+    # ...
     dtypes = df.dtypes.astype(str).to_string()
     sample = df.head(3).to_string()
     info   = f"Columns:{cols}\nDtypes:\n{dtypes}\nSample:\n{sample}"
@@ -499,6 +511,9 @@ def run_code(question, df, history, execute=True, retries=3):
 
 def auto_generate_pulse(df, chunks):
     """Proactively analyze the file for quick insights."""
+    if not has_api:
+        return "• High-speed RAG ready.\n• Data structure detected.\n• Awaiting API configuration."
+
     if df is not None:
         info = f"Cols: {list(df.columns)}\nRows: {len(df)}\nSample: {df.head(2).to_string()}"
         prompt = (
@@ -522,7 +537,7 @@ def auto_generate_pulse(df, chunks):
         )
         return r.choices[0].message.content.strip()
     except Exception:
-        return "• High-speed RAG ready.\n• Data structure detected.\n• Awaiting analysis."
+        return "• High-speed RAG ready.\n• Analysis pending."
 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
 st.sidebar.header("📂 Upload Any File")
