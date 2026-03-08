@@ -1,14 +1,13 @@
-# 🧠 InsightX AI V2: Universal RAG & Data Analyst
+# 💎 Lumina AI: Supreme Data Intelligence
 
-**InsightX AI** is a production-grade, multi-page Retrieval-Augmented Generation (RAG) platform. It allows users to chat with any file—documents, spreadsheets, code, or images—instantly with near-zero latency.
+**Lumina AI** is a production-grade, multi-page Retrieval-Augmented Generation (RAG) platform with an elite 'Chrome Abstract' user experience. It allows users to chat with any file—documents, spreadsheets, code, or images—instantly with an immersive 3D interface.
 
-## 🚀 Key Features (Version 2.0)
-
-*   **💬 Semantic Chat**: Dedicated RAG workspace for conversational AI. No heavy model downloads required.
-*   **⚡ Precise Calculator**: Code-driven mathematical engine that runs real Python/Pandas on 100% of your data.
-*   **📊 Leadership Dashboard**: Automated visual insights and executive metrics detection.
+## 🚀 Key Features
+*   **💬 Semantic Chat**: Dedicated RAG workspace for conversational AI.
+*   **⚡ Precise Logic Engine**: Code-driven mathematical engine that runs real Python/Pandas on 100% of your data.
+*   **📊 Visual Intelligence**: Automated visual insights and executive metrics detection.
 *   **👀 Data Audit**: Full statistical summaries, duplicate detection, and raw data inspection.
-*   **🛡️ Performance Engine**: Memory-resident numeric downcasting and hybrid TF-IDF indexing for extreme scale (250k+ rows).
+*   **💎 Chrome Abstract UI**: A high-end 3D visual language with glassmorphism and neon glows.
 
 ## 🏗️ Architecture
 
