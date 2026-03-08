@@ -35,7 +35,72 @@ def check_api():
         return False
     return True
 
-# ── COLUMN HEURISTICS ──────────────────────────────────────────────────────────
+# ── PREMIUM UI ENGINE ──────────────────────────────────────────────────────────
+def inject_lumina_css():
+    """Injects the elite 'Chrome Abstract' design system."""
+    st.markdown("""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
+        
+        * { font-family: 'Outfit', sans-serif; }
+        
+        /* Main App Background */
+        .stApp {
+            background: radial-gradient(circle at top right, #1a0b2e 0%, #0a0a0c 100%);
+            color: #E0E0E0;
+        }
+        
+        /* Sidebar Styling */
+        div[data-testid="stSidebar"] {
+            background-color: rgba(10, 10, 12, 0.9);
+            border-right: 1px solid rgba(188, 0, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        
+        /* Chrome Glass Containers */
+        .lumina-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+        .lumina-card:hover {
+            border: 1px solid rgba(188, 0, 255, 0.5);
+            box-shadow: 0 0 30px rgba(188, 0, 255, 0.2);
+            transform: translateY(-5px);
+        }
+        
+        /* Typography */
+        .hero-text {
+            background: linear-gradient(135deg, #FFF 0%, #BC00FF 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            font-size: 4rem;
+            letter-spacing: -2px;
+            margin-bottom: 0px;
+        }
+        
+        /* Buttons */
+        .stButton>button {
+            background: rgba(188, 0, 255, 0.1);
+            border: 1px solid rgba(188, 0, 255, 0.5);
+            color: white;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        .stButton>button:hover {
+            background: rgba(188, 0, 255, 0.3);
+            box-shadow: 0 0 15px rgba(188, 0, 255, 0.5);
+            border-color: #BC00FF;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
 def find_col(df, keywords):
     """Helper to find the best matching column for a list of keywords."""
     for col in df.columns:
@@ -240,20 +305,29 @@ def ask_ai(question, chunks, history):
 def run_code(question, df, history, execute=True):
     if not check_api(): return "API Key Missing", "Error"
     cols = str(list(df.columns))[:1000]
-    messages = [{"role": "system", "content": "Analyst. Return ONLY raw Python using 'df'. Use st.bar_chart() etc."}]
+    messages = [
+        {"role": "system", "content": "You are a professional Python Data Analyst. Return ONLY the raw code required for the analysis. DO NOT explain. DO NOT use markdown code blocks. Use the dataframe 'df'. Important: Ensure all strings are properly closed and use single lines where possible. Output to Streamlit using 'st.metric' or 'st.write'."}
+    ]
     if history:
         for c in history[-2:]:
             messages.append({"role": "user", "content": c["question"]})
             messages.append({"role": "assistant", "content": c.get("answer", "")})
-    messages.append({"role": "user", "content": f"Cols: {cols}\nQ: {question}"})
+    messages.append({"role": "user", "content": f"Data Columns: {cols}\nRequest: {question}"})
+    
+    raw = ""
     try:
         r = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=600)
         raw = r.choices[0].message.content.replace("```python", "").replace("```", "").strip()
+        
+        # Basic Security
         dangerous = ["os.", "sys.", "subprocess", "open(", "eval(", "exec(", "shutil"]
         if any(t in raw for t in dangerous): return raw, "Security block"
-        if execute: exec(raw, {"df":df, "st":st, "pd":pd, "np":np})
+        
+        if execute:
+            exec(raw, {"df": df, "st": st, "pd": pd, "np": np})
         return raw, None
-    except Exception as e: return "", str(e)
+    except Exception as e:
+        return raw, str(e)
 
 def auto_generate_pulse(df, chunks):
     if not has_api: return "• Ready."
