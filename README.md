@@ -1,28 +1,35 @@
-# 🧠 InsightX AI: Universal RAG & Data Analyst
+# 🧠 InsightX AI V2: Universal RAG & Data Analyst
 
-**InsightX AI** is a lightning-fast, privacy-conscious Retrieval-Augmented Generation (RAG) tool that allows users to chat with any file—documents, spreadsheets, code, or images—instantly.
+**InsightX AI** is a production-grade, multi-page Retrieval-Augmented Generation (RAG) platform. It allows users to chat with any file—documents, spreadsheets, code, or images—instantly with near-zero latency.
 
-## 🚀 Key Features
+## 🚀 Key Features (Version 2.0)
 
-*   **💬 Ask AI (RAG):** Smart TF-IDF indexing for instant Q&A on any file. No heavy model downloads required.
-*   **⚡ Precise Calculator:** Runs real Python/pandas code on your full dataset for 100% exact numerical answers (totals, averages, trends).
-*   **📊 Data Analysis:** Automated statistical summaries, data quality checks, and interactive charts (Bar, Line, Area).
-*   **👀 Universal Preview:** Supports CSV, Excel, PDF (with OCR), Word, PPT, JSON, ZIP, Images, and more.
-*   **📂 Multi-format Extraction:** Instant text extraction from almost any file type.
+*   **💬 Semantic Chat**: Dedicated RAG workspace for conversational AI. No heavy model downloads required.
+*   **⚡ Precise Calculator**: Code-driven mathematical engine that runs real Python/Pandas on 100% of your data.
+*   **📊 Leadership Dashboard**: Automated visual insights and executive metrics detection.
+*   **👀 Data Audit**: Full statistical summaries, duplicate detection, and raw data inspection.
+*   **🛡️ Performance Engine**: Memory-resident numeric downcasting and hybrid TF-IDF indexing for extreme scale (250k+ rows).
+
+## 🏗️ Architecture
+
+InsightX V2 uses a modular **Multi-Page Architecture**:
+- **`app.py`**: The Home Page and Data Ingestion Hub.
+- **`utils.py`**: The Central Engine (Shared extraction, RAG, and AI logic).
+- **`pages/`**: Specialized workspaces for Chat, Calculations, and Dashboards.
 
 ## 🛠️ Tech Stack
 
-*   **Frontend:** [Streamlit](https://streamlit.io/)
-*   **LLM:** [Groq](https://groq.com/) (Llama 3.3 70B Versatile)
-*   **Data Processing:** Pandas, NumPy
+*   **Frontend:** [Streamlit](https://streamlit.io/) (Multi-page configuration)
+*   **LLM:** [Groq LPU](https://groq.com/) (Meta Llama 3.3 70B)
+*   **Data Processing:** Pandas (with numeric downcasting), NumPy
 *   **Search/RAG:** Scikit-learn (TF-IDF Vectorization)
-*   **OCR:** Tesseract, Pypdf, Pdf2image
+*   **OCR:** Tesseract + Pypdf + Pdf2image
 
 ## ⚙️ Setup & Installation
 
 ### 1. Prerequisites
-Ensure you have Python 3.9+ installed and specialized system libraries for OCR:
-- **Windows:** Install [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) and [Poppler](https://github.com/oschwartz10612/poppler-windows/releases/).
+Ensure you have Python 3.9+ and system libraries for OCR:
+- **Windows:** [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) and [Poppler](https://github.com/oschwartz10612/poppler-windows/releases/).
 - **Linux:** `sudo apt-get install tesseract-ocr poppler-utils`
 
 ### 2. Install Dependencies
@@ -31,7 +38,7 @@ pip install -r requirements.txt
 ```
 
 ### 3. Environment Variables
-Create a `.env` file or set your Streamlit secrets with:
+Set your Streamlit secrets or `.env`:
 ```bash
 GROQ_API_KEY=your_groq_api_key_here
 ```
@@ -41,9 +48,5 @@ GROQ_API_KEY=your_groq_api_key_here
 streamlit run app.py
 ```
 
-## 📝 Usage Tip
-- For **summaries and explanations**, use the "Ask AI" tab.
-- For **exact calculations and charts**, use the "Precise Calculator" or "Data Analysis" tabs.
-
 ---
-*Built for the Hackathon Submission.*
+*Developed for the Hackathon V2 Upgrade.*
