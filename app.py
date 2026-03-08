@@ -116,6 +116,14 @@ TOP_K          = 3
 CONTEXT_CAP    = 4000
 MAX_OUT_TOKENS = 600
 
+# ── COLUMN HEURISTICS ──────────────────────────────────────────────────────────
+def find_col(df, keywords):
+    """Helper to find the best matching column for a list of keywords."""
+    for col in df.columns:
+        if any(k in col.lower() for k in keywords):
+            return col
+    return None
+
 # ── FILE EXTRACTORS & UTILS ────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def get_df_stats(df):
@@ -665,15 +673,15 @@ if uploaded_file or st.session_state.uploaded_df is not None:
             # 1. Descriptive
             with st.expander("📊 1. Descriptive Analysis", expanded=True):
                 c1, c2, c3 = st.columns(3)
-                if 'Amount' in df.columns or 'amount' in df.columns:
-                    col = 'Amount' if 'Amount' in df.columns else 'amount'
-                    val_sum = df[col].sum()
-                    val_avg = df[col].mean()
+                amt_col = find_col(df, ['amount', 'amt', 'value', 'val', 'price', 'total', 'volume'])
+                if amt_col:
+                    val_sum = df[amt_col].sum()
+                    val_avg = df[amt_col].mean()
                     c1.metric("Total Volume", f"₹{val_sum:,.0f}")
                     c2.metric("Avg Transaction", f"₹{val_avg:,.2f}")
                     report_txt += f"Total Volume: ₹{val_sum:,.0f}\nAvg Transaction: ₹{val_avg:,.2f}\n"
                 
-                cat_col = next((c for c in df.columns if c.lower() in ['category', 'type', 'industry']), None)
+                cat_col = find_col(df, ['category', 'cat', 'type', 'industry', 'dept', 'purpose', 'genre'])
                 if cat_col:
                     top_cat = df[cat_col].value_counts().idxmax()
                     c3.metric("Top Category", top_cat)
@@ -682,18 +690,17 @@ if uploaded_file or st.session_state.uploaded_df is not None:
 
             # 2. Comparative
             with st.expander("📈 2. Comparative Analysis", expanded=True):
-                comp_col = next((c for c in df.columns if c.lower() in ['device_type', 'network_type', 'payment_mode']), None)
-                if comp_col and ('Amount' in df.columns or 'amount' in df.columns):
-                    acol = 'Amount' if 'Amount' in df.columns else 'amount'
+                comp_col = find_col(df, ['device', 'platform', 'mode', 'channel', 'network', 'brand'])
+                if comp_col and amt_col:
                     st.write(f"**Transaction Value by {comp_col}**")
-                    st.bar_chart(df.groupby(comp_col)[acol].mean())
+                    st.bar_chart(df.groupby(comp_col)[amt_col].mean())
                 else:
-                    st.info("Upload a dataset with 'Device_Type' or 'Payment_Mode' for comparisons.")
+                    st.info("Upload a dataset with 'Device', 'Payment Mode', or 'Platform' for comparisons.")
 
             # 3. User Segmentation
             with st.expander("👥 3. User Segmentation", expanded=True):
-                age_col = next((c for c in df.columns if c.lower() in ['age', 'user_age']), None)
-                state_col = next((c for c in df.columns if c.lower() in ['state', 'region', 'location']), None)
+                age_col = find_col(df, ['age', 'years', 'dob', 'user_age'])
+                state_col = find_col(df, ['state', 'region', 'location', 'city', 'country', 'prov'])
                 
                 sc1, sc2 = st.columns(2)
                 if age_col:
@@ -702,20 +709,21 @@ if uploaded_file or st.session_state.uploaded_df is not None:
                         st.line_chart(df[age_col].value_counts().sort_index())
                 if state_col:
                     with sc2:
-                        st.write("**Top States**")
+                        st.write("**Top States/Regions**")
                         st.bar_chart(df[state_col].value_counts().head(5))
 
             # 4. Risk Metrics
             with st.expander("🛡️ 4. Risk & Operational Metrics", expanded=True):
-                fraud_col = next((c for c in df.columns if c.lower() in ['fraud_flag', 'is_fraud', 'flagged']), None)
-                status_col = next((c for c in df.columns if c.lower() in ['status', 'result', 'success']), None)
+                fraud_col = find_col(df, ['fraud', 'flag', 'is_fraud', 'risk', 'suspicious'])
+                status_col = find_col(df, ['status', 'result', 'success', 'outcome', 'stat'])
                 
                 rc1, rc2 = st.columns(2)
                 if fraud_col:
-                    fraud_rate = (df[fraud_col].astype(int).mean() * 100)
+                    fraud_rate = (pd.to_numeric(df[fraud_col], errors='coerce').fillna(0).mean() * 100)
                     rc1.metric("Fraud Rate", f"{fraud_rate:.2f}%")
                 if status_col:
-                    fail_rate = (df[status_col].str.lower() != 'success').map(int).mean() * 100
+                    is_success = df[status_col].astype(str).str.lower().str.contains('success|ok|completed')
+                    fail_rate = (1 - is_success.mean()) * 100
                     rc2.metric("Failure Rate", f"{fail_rate:.2f}%")
             
             st.divider()
