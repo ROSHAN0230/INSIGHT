@@ -31,7 +31,7 @@ has_api = client is not None
 
 def check_api():
     if not has_api:
-        st.error("🔑 GROQ_API_KEY missing. Please add it to .env or Streamlit Secrets.")
+        st.error("🔑 GROQ_API_KEY missing. Please add it to Streamlit Secrets.")
         return False
     return True
 
@@ -102,7 +102,6 @@ def inject_lumina_css():
     """, unsafe_allow_html=True)
 
 def find_col(df, keywords):
-    """Helper to find the best matching column for a list of keywords."""
     for col in df.columns:
         if any(k in col.lower() for k in keywords):
             return col
@@ -306,7 +305,7 @@ def run_code(question, df, history, execute=True):
     if not check_api(): return "API Key Missing", "Error"
     cols = str(list(df.columns))[:1000]
     messages = [
-        {"role": "system", "content": "You are a professional Python Data Analyst. Return ONLY the raw code required for the analysis. DO NOT explain. DO NOT use markdown code blocks. Use the dataframe 'df'. Important: Ensure all strings are properly closed and use single lines where possible. Output to Streamlit using 'st.metric' or 'st.write'."}
+        {"role": "system", "content": "You are a professional Python Data Analyst. Return ONLY the raw code for the analysis. Use the dataframe 'df'. Output to Streamlit using 'st.metric' or 'st.write'."}
     ]
     if history:
         for c in history[-2:]:
@@ -319,7 +318,6 @@ def run_code(question, df, history, execute=True):
         r = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=600)
         raw = r.choices[0].message.content.replace("```python", "").replace("```", "").strip()
         
-        # Basic Security
         dangerous = ["os.", "sys.", "subprocess", "open(", "eval(", "exec(", "shutil"]
         if any(t in raw for t in dangerous): return raw, "Security block"
         
