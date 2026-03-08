@@ -22,6 +22,9 @@ ENV/
 repro_performance.py
 large_test.csv
 
-# Environment
+# Environment & Secrets (NEVER PUSH THESE)
 .env
+.env.local
+.venv
 .groq_api_key
+.streamlit/secrets.toml
