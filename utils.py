@@ -31,77 +31,176 @@ has_api = client is not None
 
 def check_api():
     if not has_api:
-        st.error("🔑 GROQ_API_KEY missing. Please add it to Streamlit Secrets.")
+        st.error("🔑 GROQ_API_KEY missing. Please add it to .env or Streamlit Secrets.")
         return False
     return True
 
 # ── PREMIUM UI ENGINE ──────────────────────────────────────────────────────────
 def inject_lumina_css():
-    """Injects the elite 'Chrome Abstract' design system."""
+    """Injects the ultra-premium 'Chrome Abstract' design system from Stitch."""
     st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@300;400;600;800&family=Inter:wght@400;600;800&display=swap');
         
-        * { font-family: 'Outfit', sans-serif; }
+        :root {
+            --primary: #bb00ff;
+            --primary-glow: rgba(187, 0, 255, 0.4);
+            --background: #0a0a0c;
+            --glass: rgba(255, 255, 255, 0.02);
+            --glass-border: rgba(187, 0, 255, 0.15);
+            --chrome-gradient: linear-gradient(135deg, #FFFFFF 0%, #bb00ff 50%, #7a00ff 100%);
+        }
+
+        * { font-family: 'Outfit', 'Inter', sans-serif; }
         
-        /* Main App Background */
+        /* Global App Override */
         .stApp {
-            background: radial-gradient(circle at top right, #1a0b2e 0%, #0a0a0c 100%);
-            color: #E0E0E0;
+            background: radial-gradient(circle at top left, #1a0b2e 0%, #0f172a 45%, #0a0a0c 100%) !important;
+            color: #E0E0E0 !important;
         }
-        
-        /* Sidebar Styling */
-        div[data-testid="stSidebar"] {
-            background-color: rgba(10, 10, 12, 0.9);
-            border-right: 1px solid rgba(188, 0, 255, 0.2);
-            backdrop-filter: blur(10px);
-        }
-        
-        /* Chrome Glass Containers */
-        .lumina-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 24px;
-            backdrop-filter: blur(15px);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
-            transition: all 0.3s ease;
-            margin-bottom: 20px;
-        }
-        .lumina-card:hover {
-            border: 1px solid rgba(188, 0, 255, 0.5);
-            box-shadow: 0 0 30px rgba(188, 0, 255, 0.2);
-            transform: translateY(-5px);
-        }
-        
-        /* Typography */
+
+        /* Hide Streamlit elements for lean look */
+        header, footer {visibility: hidden;}
+        #MainMenu {visibility: hidden;}
+
+        /* Hero Text - Chrome Abstract Style */
         .hero-text {
-            background: linear-gradient(135deg, #FFF 0%, #BC00FF 100%);
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--chrome-gradient);
+            background-size: 200% auto;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             font-weight: 800;
-            font-size: 4rem;
-            letter-spacing: -2px;
+            font-size: 5rem !important;
+            letter-spacing: -3px;
             margin-bottom: 0px;
+            animation: chrome-shine 8s linear infinite;
+            filter: drop-shadow(0 0 20px rgba(187, 0, 255, 0.2));
+            line-height: 1.1;
+            text-transform: uppercase;
+        }
+
+        @keyframes chrome-shine {
+            to { background-position: 200% center; }
+        }
+
+        .lumina-subtext {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #888;
+            font-size: 1.2rem;
+            font-weight: 300;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            margin-top: -10px;
+            opacity: 0.8;
+        }
+
+        /* Premium Glass Cards */
+        .lumina-card, .glass-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-bottom: 25px;
+            position: relative;
+            overflow: hidden;
         }
         
-        /* Buttons */
+        .lumina-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(187, 0, 255, 0.05), transparent);
+            transition: 0.5s;
+        }
+
+        .lumina-card:hover::before {
+            left: 100%;
+        }
+
+        .lumina-card:hover {
+            border: 1px solid rgba(187, 0, 255, 0.4);
+            background: rgba(187, 0, 255, 0.04);
+            box-shadow: 0 0 30px rgba(187, 0, 255, 0.15);
+            transform: translateY(-5px);
+        }
+
+        /* Neon Buttons */
         .stButton>button {
-            background: rgba(188, 0, 255, 0.1);
-            border: 1px solid rgba(188, 0, 255, 0.5);
-            color: white;
-            border-radius: 8px;
-            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #bb00ff 0%, #7a00ff 100%) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 14px !important;
+            padding: 14px 28px !important;
+            font-weight: 700 !important;
+            font-family: 'Space Grotesk', sans-serif !important;
+            text-transform: uppercase !important;
+            letter-spacing: 1px !important;
+            box-shadow: 0 8px 15px rgba(187, 0, 255, 0.2) !important;
+            transition: all 0.3s ease !important;
         }
         .stButton>button:hover {
-            background: rgba(188, 0, 255, 0.3);
-            box-shadow: 0 0 15px rgba(188, 0, 255, 0.5);
-            border-color: #BC00FF;
+            transform: scale(1.02) !important;
+            box-shadow: 0 0 25px rgba(187, 0, 255, 0.5) !important;
+        }
+
+        /* Status Badges */
+        .badge-validated {
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: rgba(187, 0, 255, 0.1);
+            color: #bb00ff;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            border: 1px solid rgba(187, 0, 255, 0.3);
+            letter-spacing: 1px;
+            box-shadow: 0 0 10px rgba(187, 0, 255, 0.2);
+        }
+
+        /* Chat UI Refinement */
+        .ai-bubble {
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(187, 0, 255, 0.1);
+            border-radius: 0 24px 24px 24px;
+            padding: 24px;
+            margin-bottom: 25px;
+            color: #ddd;
+            font-size: 1rem;
+            line-height: 1.6;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .user-bubble {
+            background: linear-gradient(135deg, rgba(187, 0, 255, 0.1) 0%, rgba(122, 0, 255, 0.1) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(187, 0, 255, 0.3);
+            border-radius: 24px 24px 0 24px;
+            padding: 24px;
+            margin-bottom: 25px;
+            margin-left: auto;
+            max-width: 85%;
+            color: #fff;
+            box-shadow: 0 10px 30px rgba(187, 0, 255, 0.1);
+        }
+
+        /* Uploader Styles */
+        [data-testid="stFileUploader"] {
+            background: var(--glass);
+            border: 1px dashed var(--glass-border);
+            border-radius: 20px;
+            padding: 20px;
         }
     </style>
     """, unsafe_allow_html=True)
 
 def find_col(df, keywords):
+    """Helper to find the best matching column for a list of keywords."""
     for col in df.columns:
         if any(k in col.lower() for k in keywords):
             return col
@@ -305,7 +404,7 @@ def run_code(question, df, history, execute=True):
     if not check_api(): return "API Key Missing", "Error"
     cols = str(list(df.columns))[:1000]
     messages = [
-        {"role": "system", "content": "You are a professional Python Data Analyst. Return ONLY the raw code for the analysis. Use the dataframe 'df'. Output to Streamlit using 'st.metric' or 'st.write'."}
+        {"role": "system", "content": "You are a professional Python Data Analyst. Return ONLY the raw code required for the analysis. DO NOT explain. DO NOT use markdown code blocks. Use the dataframe 'df'. Important: Ensure all strings are properly closed and use single lines where possible. Output to Streamlit using 'st.metric' or 'st.write'."}
     ]
     if history:
         for c in history[-2:]:
@@ -318,6 +417,7 @@ def run_code(question, df, history, execute=True):
         r = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=600)
         raw = r.choices[0].message.content.replace("```python", "").replace("```", "").strip()
         
+        # Basic Security
         dangerous = ["os.", "sys.", "subprocess", "open(", "eval(", "exec(", "shutil"]
         if any(t in raw for t in dangerous): return raw, "Security block"
         
