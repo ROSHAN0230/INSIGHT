@@ -37,9 +37,10 @@ pip install -r requirements.txt
 ```
 
 ### 3. Environment Variables
-Set your Streamlit secrets or `.env`:
-```bash
-GROQ_API_KEY=your_groq_api_key_here
+For security, **Lumina AI** uses Streamlit Secrets. Add your key in the Streamlit Cloud dashboard:
+```toml
+[secrets]
+GROQ_API_KEY = "your_groq_api_key_here"
 ```
 
 ### 4. Run the App
