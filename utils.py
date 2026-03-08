@@ -211,6 +211,18 @@ def build_tfidf_index(text):
     m = v.fit_transform(chunks)
     return v, m, chunks
 
+def retrieve_chunks(question, vectorizer, tfidf_matrix, chunks):
+    if not vectorizer or tfidf_matrix is None or not chunks:
+        return chunks[:TOP_K] if chunks else []
+    try:
+        q_vec = vectorizer.transform([question])
+        sims = cosine_similarity(q_vec, tfidf_matrix).flatten()
+        top_indices = sims.argsort()[-TOP_K:][::-1]
+        results = [chunks[i] for i in top_indices if sims[i] > 0]
+        return results if results else chunks[:1]
+    except Exception:
+        return chunks[:1]
+
 def ask_ai(question, chunks, history):
     if not check_api(): return "API Key Missing"
     context = "\n---\n".join(chunks)[:CONTEXT_CAP]
