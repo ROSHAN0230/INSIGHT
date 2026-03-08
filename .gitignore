@@ -1,4 +1,27 @@
-.streamlit/secrets.toml
+# Streamlit
+.streamlit/
+! .streamlit/config.toml
+! .streamlit/credentials.toml
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# Data (Sensitive or Large)
+*.csv
+*.xlsx
+*.pdf
+! sample_data.csv # If you want to include samples
+
+# Test scripts
+repro_performance.py
+large_test.csv
+
+# Environment
 .env
+.groq_api_key
